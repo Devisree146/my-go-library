@@ -1,60 +1,218 @@
 package test
 
 import (
-	"reflect"
-	"sort"
 	"testing"
 	"time"
+
 	"unified/in_memory"
 )
 
-func TestInMemoryCache(t *testing.T) {
-	cache := in_memory.NewInMemoryCache(2)
+func TestSetAndGet(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 5*time.Second)
 
-	// Test Set and Get
-	cache.Set("key1", "value1", 1*time.Second)
-	value, err := cache.Get("key1")
-	if err != nil || value != "value1" {
-		t.Fatalf("expected 'value1', got '%v'", value)
+	// Positive test case: Set and Get a value
+	key := "testKey"
+	value := 42
+	err := cache.Set(key, value)
+	if err != nil {
+		t.Errorf("Error setting value: %v", err)
 	}
 
-	// Test TTL expiration
+	result, err := cache.Get(key)
+	if err != nil {
+		t.Errorf("Error getting value: %v", err)
+	}
+	if result != value {
+		t.Errorf("Expected %d but got %d", value, result)
+	}
+
+	// Negative test case: Get non-existent key
+	_, err = cache.Get("nonExistentKey")
+	if err == nil {
+		t.Error("Expected error for non-existent key")
+	}
+}
+
+func TestDelete(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 5*time.Second)
+
+	// Set a value
+	key := "testKey"
+	value := 42
+	cache.Set(key, value)
+
+	// Positive test case: Delete existing key
+	err := cache.Delete(key)
+	if err != nil {
+		t.Errorf("Error deleting key: %v", err)
+	}
+
+	// Verify the key is deleted
+	_, err = cache.Get(key)
+	if err == nil {
+		t.Error("Expected error for deleted key")
+	}
+
+	// Negative test case: Delete non-existent key
+	err = cache.Delete("nonExistentKey")
+	if err == nil {
+		t.Error("Expected error for non-existent key")
+	}
+}
+
+func TestExists(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 5*time.Second)
+
+	// Set a value
+	key := "testKey"
+	value := 42
+	cache.Set(key, value)
+
+	// Positive test case: Check if key exists
+	if !cache.Exists(key) {
+		t.Errorf("Expected key %s to exist", key)
+	}
+
+	// Negative test case: Check if non-existent key exists
+	if cache.Exists("nonExistentKey") {
+		t.Error("Expected non-existent key to not exist")
+	}
+}
+
+func TestCleanupExpiredEntries(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 1*time.Second)
+
+	// Set a value with TTL
+	key := "testKey"
+	value := 42
+	cache.Set(key, value)
+
+	// Wait for TTL to expire
 	time.Sleep(2 * time.Second)
-	_, err = cache.Get("key1")
+
+	// Verify the key is deleted due to expiration
+	_, err := cache.Get(key)
 	if err == nil {
-		t.Fatalf("expected error, got nil")
+		t.Error("Expected error for expired key")
 	}
+}
 
-	// Test LRU eviction
-	cache.Set("key2", "value2", 1*time.Second)
-	cache.Set("key3", "value3", 1*time.Second)
-	_, err = cache.Get("key1")
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
+func TestDeleteAll(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 5*time.Second)
 
-	// Test GetAllKeys
-	keys := cache.GetAllKeys()
-	expectedKeys := []string{"key2", "key3"}
-	sort.Strings(keys)
-	sort.Strings(expectedKeys)
-	if !reflect.DeepEqual(keys, expectedKeys) {
-		t.Fatalf("expected keys '%v', got '%v'", expectedKeys, keys)
-	}
+	// Set some values
+	cache.Set("key1", 1)
+	cache.Set("key2", 2)
+	cache.Set("key3", 3)
 
-	// Test Delete
-	cache.Delete("key2")
-	_, err = cache.Get("key2")
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-
-	// Test DeleteAll
-	cache.Set("key4", "value4", 1*time.Second)
-	cache.Set("key5", "value5", 1*time.Second)
+	// Delete all keys
 	cache.DeleteAll()
-	keys = cache.GetAllKeys()
+
+	// Verify all keys are deleted
+	keys := cache.GetAllKeys()
 	if len(keys) != 0 {
-		t.Fatalf("expected cache to be empty, got '%v' keys", len(keys))
+		t.Errorf("Expected all keys to be deleted, found %d keys", len(keys))
+	}
+}
+
+func TestLRUEviction(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 5*time.Second)
+
+	// Set 3 values
+	cache.Set("key1", 1)
+	cache.Set("key2", 2)
+	cache.Set("key3", 3)
+
+	// Add another value to trigger LRU eviction
+	cache.Set("key4", 4)
+
+	// Verify the first key was evicted
+	_, err := cache.Get("key1")
+	if err == nil {
+		t.Error("Expected key1 to be evicted")
+	}
+
+	// Verify other keys still exist
+	if _, err := cache.Get("key2"); err != nil {
+		t.Error("Expected key2 to exist")
+	}
+	if _, err := cache.Get("key3"); err != nil {
+		t.Error("Expected key3 to exist")
+	}
+	if _, err := cache.Get("key4"); err != nil {
+		t.Error("Expected key4 to exist")
+	}
+}
+
+func TestSetAndGetWithTTL(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 2*time.Second)
+
+	// Set a value with TTL
+	key := "testKey"
+	value := 42
+	cache.Set(key, value)
+
+	// Verify the key exists before TTL expiry
+	result, err := cache.Get(key)
+	if err != nil {
+		t.Errorf("Error getting value: %v", err)
+	}
+	if result != value {
+		t.Errorf("Expected %d but got %d", value, result)
+	}
+
+	// Wait for TTL to expire
+	time.Sleep(3 * time.Second)
+
+	// Verify the key is deleted due to expiration
+	_, err = cache.Get(key)
+	if err == nil {
+		t.Error("Expected error for expired key")
+	}
+}
+
+func TestSetUpdate(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 5*time.Second)
+
+	// Set a value
+	key := "testKey"
+	value := 42
+	cache.Set(key, value)
+
+	// Update the value
+	newValue := 84
+	cache.Set(key, newValue)
+
+	// Verify the updated value
+	result, err := cache.Get(key)
+	if err != nil {
+		t.Errorf("Error getting value: %v", err)
+	}
+	if result != newValue {
+		t.Errorf("Expected %d but got %d", newValue, result)
+	}
+}
+
+func TestNegativeSetWithEmptyKey(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 5*time.Second)
+
+	// Negative test case: Set with empty key
+	err := cache.Set("", 42)
+	if err == nil {
+		t.Error("Expected error for empty key")
+	} else {
+		t.Logf("Expected error for empty key: %v", err)
+	}
+}
+
+func TestNegativeSetWithNilValue(t *testing.T) {
+	cache := in_memory.NewInMemoryCache(3, 5*time.Second)
+
+	// Negative test case: Set with nil value
+	err := cache.Set("testKey", nil)
+	if err == nil {
+		t.Error("Expected error for nil value")
+	} else {
+		t.Logf("Expected error for nil value: %v", err)
 	}
 }

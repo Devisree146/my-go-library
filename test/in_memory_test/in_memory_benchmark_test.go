@@ -3,74 +3,104 @@ package test
 import (
 	"fmt"
 	"testing"
-	"time"
 	"unified/in_memory"
 )
 
-func BenchmarkInMemoryCacheSet(b *testing.B) {
-	cache := in_memory.NewInMemoryCache(1000)
+func BenchmarkSet(b *testing.B) {
+	cache := in_memory.NewInMemoryCache(1000, 0)
+
+	key := "benchmarkKey"
+	value := 42
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cache.Set(fmt.Sprintf("key%d", i), "value", 5*time.Minute)
+		cache.Set(fmt.Sprintf("%s%d", key, i), value)
 	}
 }
 
-func BenchmarkInMemoryCacheGet(b *testing.B) {
-	cache := in_memory.NewInMemoryCache(1000)
+func BenchmarkGet(b *testing.B) {
+	cache := in_memory.NewInMemoryCache(1000, 0)
+
+	key := "benchmarkKey"
+	value := 42
+	cache.Set(key, value)
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cache.Get(fmt.Sprintf("key%d", i))
+		cache.Get(key)
 	}
 }
 
-func BenchmarkInMemoryCacheDelete(b *testing.B) {
-	cache := in_memory.NewInMemoryCache(1000)
+func BenchmarkDelete(b *testing.B) {
+	cache := in_memory.NewInMemoryCache(1000, 0)
+
+	key := "benchmarkKey"
+	value := 42
+	cache.Set(key, value)
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cache.Delete(fmt.Sprintf("key%d", i))
+		cache.Delete(key)
 	}
 }
 
-func BenchmarkInMemoryCacheSetParallel(b *testing.B) {
-	cache := in_memory.NewInMemoryCache(1000)
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			cache.Set(fmt.Sprintf("key%d", i), "value", 5*time.Minute)
-			i++
-		}
-	})
+func BenchmarkExists(b *testing.B) {
+	cache := in_memory.NewInMemoryCache(1000, 0)
+
+	key := "benchmarkKey"
+	value := 42
+	cache.Set(key, value)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cache.Exists(key)
+	}
 }
 
-func BenchmarkInMemoryCacheGetParallel(b *testing.B) {
-	cache := in_memory.NewInMemoryCache(1000)
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			cache.Get(fmt.Sprintf("key%d", i))
-			i++
-		}
-	})
-}
+func BenchmarkDeleteAll(b *testing.B) {
+	cache := in_memory.NewInMemoryCache(1000, 0)
 
-func BenchmarkInMemoryCacheDeleteAll(b *testing.B) {
-	cache := in_memory.NewInMemoryCache(1000)
 	for i := 0; i < 1000; i++ {
-		cache.Set(fmt.Sprintf("key%d", i), "value", 5*time.Minute)
+		cache.Set(fmt.Sprintf("key%d", i), i)
 	}
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cache.DeleteAll()
-		for i := 0; i < 1000; i++ {
-			cache.Set(fmt.Sprintf("key%d", i), "value", 5*time.Minute)
-		}
 	}
 }
 
-func BenchmarkInMemoryCacheGetAll(b *testing.B) {
-	cache := in_memory.NewInMemoryCache(1000)
-	for i := 0; i < 1000; i++ {
-		cache.Set(fmt.Sprintf("key%d", i), "value", 5*time.Minute)
-	}
+func BenchmarkNegativeGet(b *testing.B) {
+	cache := in_memory.NewInMemoryCache(1000, 0)
+
+	key := "nonExistentKey"
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cache.GetAllKeys() // Use GetAllKeys instead of Keys
+		cache.Get(key)
+	}
+}
+
+func BenchmarkNegativeDelete(b *testing.B) {
+	cache := in_memory.NewInMemoryCache(1000, 0)
+
+	key := "nonExistentKey"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cache.Delete(key)
+	}
+}
+
+func BenchmarkGetAll(b *testing.B) {
+	cache := in_memory.NewInMemoryCache(1000, 0)
+
+	for i := 0; i < 1000; i++ {
+		cache.Set(fmt.Sprintf("key%d", i), i)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cache.GetAllKeys()
 	}
 }

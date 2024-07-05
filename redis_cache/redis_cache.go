@@ -12,6 +12,10 @@ type Cache struct {
 	maxSize int
 }
 
+const (
+	StandardTTL = 5 * time.Minute // Exported standard TTL of 5 minutes
+)
+
 func NewRedisCache(address, password string, db, maxSize int) *Cache {
 	client := redis.NewClient(&redis.Options{
 		Addr:     address,
@@ -59,28 +63,31 @@ func (c *Cache) Delete(key string) error {
 	}
 
 	// No need to perform LRU eviction on delete operation
-
 	return nil
 }
 
-func (c *Cache) DeleteAll() {
+func (c *Cache) DeleteAll() error {
 	ctx := context.Background()
-	c.client.FlushDB(ctx).Err()
+	err := c.client.FlushDB(ctx).Err()
+	if err != nil {
+		return err
+	}
 
 	// No need to perform LRU eviction on delete all operation
+	return nil
 }
 
-func (c *Cache) GetAllKeys() []string {
+func (c *Cache) GetAllKeys() ([]string, error) {
 	ctx := context.Background()
 	keys, err := c.client.Keys(ctx, "*").Result()
 	if err != nil {
-		return []string{}
+		return nil, err
 	}
 
 	// Perform LRU eviction if cache exceeds maxSize
 	c.performLRUEviction()
 
-	return keys
+	return keys, nil
 }
 
 func (c *Cache) performLRUEviction() {
@@ -101,7 +108,7 @@ func (c *Cache) performLRUEviction() {
 			if err != nil {
 				continue
 			}
-			lastAccessed := time.Now().Add(-time.Second * time.Duration(ts))
+			lastAccessed := time.Now().Add(-time.Second * time.Duration(ts.Seconds()))
 			if oldestTime.IsZero() || lastAccessed.Before(oldestTime) {
 				oldestTime = lastAccessed
 				oldestKey = key

@@ -1,4 +1,4 @@
-module unified
+module github.com/Devisree146/my-go-library
 
 go 1.22.3
 

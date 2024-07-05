@@ -12,8 +12,11 @@ import (
 type CacheEntry struct {
 	Key   string `json:"key"`
 	Value int    `json:"value"`
-	TTL   string `json:"ttl"`
 }
+
+const (
+	standardTTL = 5 * time.Minute // Standard TTL of 5 minutes
+)
 
 func main() {
 	// Initialize your Redis cache instance with maxSize of 3
@@ -22,7 +25,7 @@ func main() {
 	// Setup Gin router
 	router := gin.Default()
 
-	// POST endpoint to set cache
+	// POST endpoint to set cache with standard TTL
 	router.POST("/cache", func(c *gin.Context) {
 		var data CacheEntry
 		if err := c.ShouldBindJSON(&data); err != nil {
@@ -30,13 +33,7 @@ func main() {
 			return
 		}
 
-		ttlDuration, err := time.ParseDuration(data.TTL)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid TTL format"})
-			return
-		}
-
-		err = cache.Set(data.Key, data.Value, ttlDuration)
+		err := cache.Set(data.Key, data.Value, redis_cache.StandardTTL)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set key"})
 			return
@@ -88,7 +85,11 @@ func main() {
 
 	// GET endpoint to retrieve all cache keys
 	router.GET("/cache/all", func(c *gin.Context) {
-		cachedKeys := cache.GetAllKeys() // Correct usage, retrieves keys
+		cachedKeys, err := cache.GetAllKeys() // Correct usage, retrieves keys
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get keys"})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{"keys": cachedKeys})
 	})

@@ -19,47 +19,61 @@ type InMemoryCache struct {
 	maxSize int
 	cache   map[string]*list.Element
 	lruList *list.List
+	ttl     time.Duration
 	lock    sync.Mutex
 }
 
-// NewInMemoryCache initializes a new cache with a given maximum size.
-func NewInMemoryCache(maxSize int) *InMemoryCache {
-	return &InMemoryCache{
+// NewInMemoryCache initializes a new cache with a given maximum size and TTL.
+func NewInMemoryCache(maxSize int, ttl time.Duration) *InMemoryCache {
+	c := &InMemoryCache{
 		maxSize: maxSize,
 		cache:   make(map[string]*list.Element),
 		lruList: list.New(),
+		ttl:     ttl,
 	}
+	// Start a background cleanup goroutine
+	go c.startCleanup()
+	return c
 }
 
 // Set adds or updates a key-value pair in the cache and handles LRU eviction.
-func (c *InMemoryCache) Set(key string, value interface{}, ttl time.Duration) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *InMemoryCache) Set(key string, value interface{}) error {
+    c.lock.Lock()
+    defer c.lock.Unlock()
 
-	// If the key already exists, update the value and TTL, and move it to the front.
-	if element, exists := c.cache[key]; exists {
-		c.lruList.MoveToFront(element)
-		element.Value.(*Entry).Value = value
-		element.Value.(*Entry).TTL = time.Now().Add(ttl)
-		return nil
-	}
+    // Validate key and value
+    if key == "" {
+        return fmt.Errorf("key cannot be empty")
+    }
+    if value == nil {
+        return fmt.Errorf("value cannot be nil")
+    }
 
-	// If the cache is at its maximum size, evict the least recently used element.
-	if len(c.cache) >= c.maxSize {
-		c.evict()
-	}
+    // If the key already exists, update the value and TTL, and move it to the front.
+    if element, exists := c.cache[key]; exists {
+        c.lruList.MoveToFront(element)
+        element.Value.(*Entry).Value = value
+        element.Value.(*Entry).TTL = time.Now().Add(c.ttl)
+        return nil
+    }
 
-	// Add the new key-value pair to the cache.
-	newEntry := &Entry{
-		Key:   key,
-		Value: value,
-		TTL:   time.Now().Add(ttl),
-	}
-	element := c.lruList.PushFront(newEntry)
-	c.cache[key] = element
+    // If the cache is at its maximum size, evict the least recently used element.
+    if len(c.cache) >= c.maxSize {
+        c.evict()
+    }
 
-	return nil
+    // Add the new key-value pair to the cache.
+    newEntry := &Entry{
+        Key:   key,
+        Value: value,
+        TTL:   time.Now().Add(c.ttl),
+    }
+    element := c.lruList.PushFront(newEntry)
+    c.cache[key] = element
+
+    return nil
 }
+
 
 // Get fetches the value from the cache and moves the entry to the front of the LRU list.
 func (c *InMemoryCache) Get(key string) (interface{}, error) {
@@ -136,4 +150,27 @@ func (c *InMemoryCache) GetAllKeys() []string {
 	}
 
 	return keys
+}
+
+// startCleanup starts a background goroutine to periodically remove expired entries.
+func (c *InMemoryCache) startCleanup() {
+	ticker := time.NewTicker(c.ttl)
+	defer ticker.Stop()
+
+	for {
+		<-ticker.C
+		c.cleanupExpiredEntries()
+	}
+}
+
+// cleanupExpiredEntries removes expired entries from the cache.
+func (c *InMemoryCache) cleanupExpiredEntries() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	for _, element := range c.cache {
+		if element.Value.(*Entry).TTL.Before(time.Now()) {
+			c.removeElement(element)
+		}
+	}
 }

@@ -11,11 +11,12 @@ import (
 type CacheEntry struct {
 	Key   string `json:"key"`
 	Value int    `json:"value"`
-	TTL   string `json:"ttl"`
 }
 
+const TTL = 5 * time.Minute // Standard TTL of 5 minutes
+
 func main() {
-	cache := in_memory.NewInMemoryCache(3)
+	cache := in_memory.NewInMemoryCache(3, TTL)
 	router := gin.Default()
 
 	router.POST("/cache", func(c *gin.Context) {
@@ -25,13 +26,7 @@ func main() {
 			return
 		}
 
-		ttlDuration, err := time.ParseDuration(data.TTL)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid TTL format"})
-			return
-		}
-
-		cache.Set(data.Key, data.Value, ttlDuration)
+		cache.Set(data.Key, data.Value)
 		c.JSON(http.StatusCreated, gin.H{"message": "Key set successfully"})
 	})
 

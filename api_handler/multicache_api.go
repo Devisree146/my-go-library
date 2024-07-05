@@ -8,4 +8,3 @@ func main() {
 	router := multicache.SetupRouter()
 	router.Run(":8080")
 }
-

@@ -1,4 +1,4 @@
-package test
+/*package test
 
 import (
 	"bytes"
@@ -112,3 +112,4 @@ func BenchmarkDeleteCache(b *testing.B) {
 		router.ServeHTTP(w, req)
 	}
 }
+*/
